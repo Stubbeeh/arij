@@ -45,6 +45,22 @@ function open(): Database.Database {
       parent_id INTEGER REFERENCES tickets(id) ON DELETE SET NULL,
       UNIQUE (project_id, number)
     );
+    CREATE TABLE IF NOT EXISTS ticket_attachments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL CHECK (kind IN ('link', 'file')),
+      label TEXT NOT NULL DEFAULT '',
+      url TEXT,
+      storage_name TEXT UNIQUE,
+      original_name TEXT,
+      content_type TEXT,
+      size INTEGER,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CHECK (
+        (kind = 'link' AND url IS NOT NULL AND storage_name IS NULL AND original_name IS NULL AND size IS NULL) OR
+        (kind = 'file' AND url IS NULL AND storage_name IS NOT NULL AND original_name IS NOT NULL AND size IS NOT NULL)
+      )
+    );
     CREATE TABLE IF NOT EXISTS boards (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,

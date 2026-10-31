@@ -1,5 +1,6 @@
 import { db } from "../db";
 import { ApiError, notFound } from "../http";
+import { deleteStoredFilesForTickets } from "./attachments";
 import type { Category, Collaborator, Project, Status } from "@/shared/types";
 
 type ProjectRow = { id: number; name: string; prefix: string };
@@ -40,8 +41,10 @@ export function updateProject(id: number, input: { name: string }): Project {
   return getProject(id);
 }
 
-export function deleteProject(id: number) {
+export async function deleteProject(id: number) {
   getProject(id);
+  const ticketIds = (db.prepare("SELECT id FROM tickets WHERE project_id = ?").all(id) as { id: number }[]).map((t) => t.id);
+  await deleteStoredFilesForTickets(ticketIds);
   // Tickets reference statuses without cascade, so remove them first.
   db.transaction(() => {
     db.prepare("DELETE FROM tickets WHERE project_id = ?").run(id);

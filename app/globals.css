@@ -478,6 +478,101 @@ tr.clickable:hover {
   white-space: pre-wrap;
 }
 
+.attachment-section {
+  border-top: 1px solid var(--c-silver);
+  padding-top: 12px;
+}
+
+.attachment-section h3 {
+  font-size: 15px;
+}
+
+.attachment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.attachment-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--c-surface);
+}
+
+.attachment-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.attachment-details a {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.attachment-subtitle {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.attachment-link-form {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.attachment-grow {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.attachment-file-button {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--c-slate);
+  border-radius: var(--radius);
+  background: var(--c-white);
+  padding: 6px 12px;
+  color: var(--c-dark);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.attachment-file-button:hover {
+  background: var(--c-surface);
+}
+
+.attachment-file-button:focus-within {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+}
+
+.attachment-file-button input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.attachment-hint {
+  margin: 0;
+  font-size: 12px;
+}
+
+@media (max-width: 600px) {
+  .attachment-link-form {
+    grid-template-columns: 1fr;
+  }
+}
+
 .stage-edit {
   background: var(--c-white);
   border: 1px solid var(--c-silver);

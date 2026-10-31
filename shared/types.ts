@@ -46,6 +46,10 @@ export const ticketInput = z.object({
   parentId: z.number().int().nullable().optional(),
 });
 export const ticketUpdate = ticketInput.partial();
+export const attachmentLinkInput = z.object({
+  url: z.string().trim().url().max(2048),
+  label: z.string().trim().max(200).optional(),
+});
 
 export const boardInput = z.object({ name });
 export const stagesInput = z.object({
@@ -72,12 +76,22 @@ export type TicketSummary = {
   statusId: number;
   parent: { id: number; key: string; title: string; type: TicketType } | null;
 };
+export type TicketAttachment = {
+  id: number;
+  kind: "link" | "file";
+  label: string;
+  createdAt: string;
+} & (
+  | { kind: "link"; url: string }
+  | { kind: "file"; filename: string; size: number; contentType: string; downloadUrl: string }
+);
 export type Ticket = TicketSummary & {
   projectId: number;
   description: string;
   reporter: string;
   assignee: string | null;
   children: TicketSummary[];
+  attachments: TicketAttachment[];
 };
 export type Stage = {
   id: number;

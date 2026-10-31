@@ -5,16 +5,18 @@ import type {
   Collaborator,
   Project,
   Status,
+  TicketAttachment,
   Ticket,
   TicketSummary,
   TicketType,
 } from "@/shared/types";
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
   const res = await fetch(url, {
     method,
-    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: body === undefined || isFormData ? undefined : { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : isFormData ? (body as FormData) : JSON.stringify(body),
   });
   if (res.status === 204) return undefined as T;
   const data = await res.json();
@@ -62,6 +64,17 @@ export const api = {
     create: (pid: number, b: TicketPayload) => call<Ticket>("POST", `/api/projects/${pid}/tickets`, b),
     update: (key: string, b: TicketPayload) => call<Ticket>("PATCH", `/api/tickets/${key}`, b),
     remove: (key: string) => call<void>("DELETE", `/api/tickets/${key}`),
+    attachments: (key: string) => call<TicketAttachment[]>("GET", `/api/tickets/${encodeURIComponent(key)}/attachments`),
+    addLinkAttachment: (key: string, b: { url: string; label?: string }) =>
+      call<TicketAttachment>("POST", `/api/tickets/${encodeURIComponent(key)}/attachments`, b),
+    addFileAttachment: (key: string, file: File, label?: string) => {
+      const body = new FormData();
+      body.append("file", file, file.name);
+      if (label) body.append("label", label);
+      return call<TicketAttachment>("POST", `/api/tickets/${encodeURIComponent(key)}/attachments`, body);
+    },
+    removeAttachment: (key: string, attachmentId: number) =>
+      call<void>("DELETE", `/api/tickets/${encodeURIComponent(key)}/attachments/${attachmentId}`),
   },
   boards: {
     list: (pid: number) => call<Board[]>("GET", `/api/projects/${pid}/boards`),

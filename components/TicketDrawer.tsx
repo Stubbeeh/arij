@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api-client";
 import { Modal } from "./Modal";
+import { TicketAttachments } from "./TicketAttachments";
 import { TicketForm } from "./TicketForm";
 import type { Status, Ticket, TicketSummary } from "@/shared/types";
 
@@ -87,6 +88,14 @@ export function TicketDrawer({
               </tr>
             </tbody>
           </table>
+          <TicketAttachments
+            ticketKey={ticket.key}
+            attachments={ticket.attachments}
+            onChanged={() => {
+              load();
+              onChanged();
+            }}
+          />
           {ticket.children.length > 0 && (
             <>
               <h3>Children ({ticket.children.length})</h3>

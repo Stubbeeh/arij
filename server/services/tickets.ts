@@ -1,5 +1,6 @@
 import { db } from "../db";
 import { ApiError, notFound } from "../http";
+import { deleteStoredFilesForTickets, listTicketAttachments } from "./attachments";
 import { getProject } from "./projects";
 import { ALLOWED_PARENTS, type Ticket, type TicketSummary, type TicketType } from "@/shared/types";
 
@@ -42,7 +43,15 @@ export function listTickets(projectId: number): TicketSummary[] {
 
 function full(r: Row): Ticket {
   const children = (db.prepare(`${SELECT} WHERE t.parent_id = ? ORDER BY t.number`).all(r.id) as Row[]).map(summary);
-  return { ...summary(r), projectId: r.project_id, description: r.description, reporter: r.reporter, assignee: r.assignee, children };
+  return {
+    ...summary(r),
+    projectId: r.project_id,
+    description: r.description,
+    reporter: r.reporter,
+    assignee: r.assignee,
+    children,
+    attachments: listTicketAttachments(`${r.prefix}-${r.number}`),
+  };
 }
 
 export function getTicket(key: string): Ticket {
@@ -141,7 +150,8 @@ export function updateTicket(key: string, input: Partial<Input>): Ticket {
   return getTicket(key);
 }
 
-export function deleteTicket(key: string) {
+export async function deleteTicket(key: string) {
   const t = getTicket(key);
+  await deleteStoredFilesForTickets([t.id]);
   db.prepare("DELETE FROM tickets WHERE id = ?").run(t.id);
 }

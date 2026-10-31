@@ -1,4 +1,4 @@
-import type { Collaborator, Project, Status, Ticket, TicketSummary } from "../shared/types";
+import type { Collaborator, Project, Status, Ticket, TicketAttachment, TicketSummary } from "../shared/types";
 
 const BASE = (process.env.ARIJ_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
@@ -7,9 +7,11 @@ export class ToolError extends Error {}
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
+    const headers = new Headers(init?.headers);
+    if (!(typeof FormData !== "undefined" && init?.body instanceof FormData)) headers.set("Content-Type", "application/json");
     res = await fetch(`${BASE}/api${path}`, {
       ...init,
-      headers: { "Content-Type": "application/json" },
+      headers,
     });
   } catch {
     throw new ToolError(`Arij app not reachable at ${BASE}. Start it with \`npm run dev\`.`);
@@ -32,6 +34,18 @@ export const createTicket = (projectId: number, body: unknown) =>
   api<Ticket>(`/projects/${projectId}/tickets`, send("POST", body));
 export const updateTicket = (key: string, body: unknown) =>
   api<Ticket>(`/tickets/${encodeURIComponent(key)}`, send("PATCH", body));
+export const addLinkAttachment = (key: string, body: { url: string; label?: string }) =>
+  api<TicketAttachment>(`/tickets/${encodeURIComponent(key)}/attachments`, send("POST", body));
+export function addFileAttachment(key: string, filename: string, bytes: Uint8Array, label?: string) {
+  const form = new FormData();
+  const content = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(content).set(bytes);
+  form.append("file", new Blob([content], { type: "application/octet-stream" }), filename);
+  if (label) form.append("label", label);
+  return api<TicketAttachment>(`/tickets/${encodeURIComponent(key)}/attachments`, { method: "POST", body: form });
+}
+export const removeAttachment = (key: string, attachmentId: number) =>
+  api<void>(`/tickets/${encodeURIComponent(key)}/attachments/${attachmentId}`, { method: "DELETE" });
 
 // Accepts a numeric id or a prefix such as "ABC".
 export async function resolveProject(ref: string): Promise<Project> {

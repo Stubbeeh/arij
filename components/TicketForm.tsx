@@ -7,6 +7,9 @@ import { PersonField } from "./PersonField";
 import { ALLOWED_PARENTS, TICKET_TYPES, type Status, type Ticket, type TicketSummary, type TicketType } from "@/shared/types";
 
 const REPORTER_KEY = "arij.lastReporter";
+type PendingAttachment =
+  | { id: string; kind: "link"; url: string; label: string }
+  | { id: string; kind: "file"; file: File };
 
 export function TicketForm({
   projectId,
@@ -34,6 +37,11 @@ export function TicketForm({
   const [statusId, setStatusId] = useState(ticket?.statusId ?? initialStatusId ?? statuses[0]?.id);
   const [parentId, setParentId] = useState<number | null>(ticket?.parent?.id ?? null);
   const [error, setError] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkLabel, setLinkLabel] = useState("");
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  const [createdTicket, setCreatedTicket] = useState<Ticket | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const parentTypes = ALLOWED_PARENTS[type];
   const parents = tickets.filter((t) => parentTypes.includes(t.type) && t.id !== ticket?.id);
@@ -41,6 +49,7 @@ export function TicketForm({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setSaving(true);
     const body = {
       type,
       title,
@@ -52,12 +61,63 @@ export function TicketForm({
       parentId: parentTypes.length ? parentId : null,
     };
     try {
-      const saved = ticket ? await api.tickets.update(ticket.key, body) : await api.tickets.create(projectId, body);
+      let saved = ticket
+        ? await api.tickets.update(ticket.key, body)
+        : createdTicket
+          ? await api.tickets.update(createdTicket.key, body)
+          : await api.tickets.create(projectId, body);
       if (reporter) localStorage.setItem(REPORTER_KEY, reporter);
+      if (!ticket) {
+        setCreatedTicket(saved);
+        const failed: PendingAttachment[] = [];
+        for (const attachment of pendingAttachments) {
+          try {
+            if (attachment.kind === "link") {
+              await api.tickets.addLinkAttachment(saved.key, { url: attachment.url, label: attachment.label });
+            } else {
+              await api.tickets.addFileAttachment(saved.key, attachment.file);
+            }
+          } catch {
+            failed.push(attachment);
+          }
+        }
+        setPendingAttachments(failed);
+        if (failed.length) {
+          setError(`Ticket ${saved.key} was created, but ${failed.length} attachment${failed.length === 1 ? "" : "s"} failed. Retry or add them from the ticket details.`);
+          return;
+        }
+        if (pendingAttachments.length) saved = await api.tickets.get(saved.key);
+      }
       onSaved(saved);
     } catch (err) {
       setError((err as Error).message);
+    } finally {
+      setSaving(false);
     }
+  }
+
+  function stageLink() {
+    setError("");
+    try {
+      const parsed = new URL(linkUrl);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new Error("Use an HTTP or HTTPS link");
+      setPendingAttachments((items) => [...items, { id: crypto.randomUUID(), kind: "link", url: parsed.href, label: linkLabel.trim() }]);
+      setLinkUrl("");
+      setLinkLabel("");
+    } catch (err) {
+      setError((err as Error).message || "Enter a valid HTTP or HTTPS link");
+    }
+  }
+
+  function stageFiles(files: FileList | null) {
+    if (!files) return;
+    const selected = Array.from(files);
+    const tooLarge = selected.filter((file) => file.size > 25 * 1024 * 1024);
+    setPendingAttachments((items) => [
+      ...items,
+      ...selected.filter((file) => file.size <= 25 * 1024 * 1024).map((file) => ({ id: crypto.randomUUID(), kind: "file" as const, file })),
+    ]);
+    setError(tooLarge.length ? `${tooLarge.map((file) => file.name).join(", ")} exceed the 25 MB file limit.` : "");
   }
 
   return (
@@ -102,6 +162,49 @@ export function TicketForm({
           Description
           <textarea rows={5} value={description} onChange={(e) => setDescription(e.target.value)} />
         </label>
+        {!ticket && (
+          <section className="attachment-section stack">
+            <h3>Attachments</h3>
+            <div className="row wrap">
+              <label className="field attachment-grow">
+                Link URL
+                <input type="url" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://" maxLength={2048} />
+              </label>
+              <label className="field attachment-grow">
+                Label (optional)
+                <input value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} maxLength={200} />
+              </label>
+              <button type="button" disabled={!linkUrl.trim()} onClick={stageLink}>
+                Add link
+              </button>
+            </div>
+            <label className="field">
+              Add files (up to 25 MB each)
+              <input type="file" multiple onChange={(e) => {
+                stageFiles(e.currentTarget.files);
+                e.currentTarget.value = "";
+              }} />
+            </label>
+            {pendingAttachments.length > 0 && (
+              <ul className="attachment-list">
+                {pendingAttachments.map((attachment) => (
+                  <li className="attachment-item" key={attachment.id}>
+                    <span>
+                      {attachment.kind === "link" ? attachment.label || attachment.url : attachment.file.name}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => setPendingAttachments((items) => items.filter((item) => item.id !== attachment.id))}
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
         {parentTypes.length > 0 && (
           <label className="field">
             Parent ({parentTypes.join(" or ")})
@@ -126,11 +229,11 @@ export function TicketForm({
         {error && <div className="error">{error}</div>}
         <div className="row">
           <span className="spacer" />
-          <button type="button" onClick={onClose}>
+          <button type="button" disabled={saving} onClick={onClose}>
             Cancel
           </button>
-          <button className="primary" disabled={!reporter || !title.trim()}>
-            Save
+          <button className="primary" disabled={saving || (!createdTicket && (!reporter || !title.trim()))}>
+            {saving ? "Saving..." : createdTicket ? "Retry attachments" : "Save"}
           </button>
         </div>
       </form>
